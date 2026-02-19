@@ -1,0 +1,84 @@
+name: Build Physio SUAI APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:   # Allows manual trigger from GitHub UI
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.4'
+
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew || true
+
+      - name: Generate Keystore (if not already present)
+        run: |
+          if [ ! -f app/keystore.jks ]; then
+            keytool -genkeypair \
+              -v \
+              -keystore app/keystore.jks \
+              -alias physiosuai \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -storepass physiosuai123 \
+              -keypass physiosuai123 \
+              -dname "CN=Physio SUAI, OU=App, O=PhysioSUAI, L=City, ST=State, C=US"
+          fi
+
+      - name: Build Release APK
+        run: gradle assembleRelease
+        env:
+          KEYSTORE_PASSWORD: physiosuai123
+          KEY_ALIAS: physiosuai
+          KEY_PASSWORD: physiosuai123
+
+      - name: Rename APK
+        run: |
+          mkdir -p output
+          cp app/build/outputs/apk/release/app-release.apk output/PhysioSUAI-v8.apk
+
+      - name: Upload APK as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PhysioSUAI-APK
+          path: output/PhysioSUAI-v8.apk
+          retention-days: 30
+
+      - name: Create Release
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v8.0
+          name: Physio SUAI v8.0
+          files: output/PhysioSUAI-v8.apk
+          generate_release_notes: false
+          body: |
+            ## Physio SUAI v8.0 📱
+            
+            ### Install Instructions
+            1. Download `PhysioSUAI-v8.apk`
+            2. On your Android phone → Settings → Allow installs from unknown sources
+            3. Open the downloaded APK and install
+            4. Done! 🎉
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

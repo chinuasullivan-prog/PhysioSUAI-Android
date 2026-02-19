@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fun Jokes – Physio SUAI</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/hybrid-config.js"></script>
+  <style>
+    /* ── Beautiful icon buttons ── */
+    .icon-btn {
+      width: 46px; height: 46px; border-radius: 14px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; flex-shrink: 0;
+      transition: transform .15s, box-shadow .15s;
+      cursor: pointer; border: none; outline: none;
+    }
+    .icon-btn:active { transform: scale(.92); }
+    .btn-attach { background: linear-gradient(135deg,#374151,#1f2937); border:1.5px solid #4b5563; color:#e5e7eb; }
+    .btn-attach:hover { background: linear-gradient(135deg,#4b5563,#374151); box-shadow:0 4px 14px #0004; }
+    .btn-emoji  { background: linear-gradient(135deg,#92400e,#78350f); border:1.5px solid #b45309; color:#fde68a; }
+    .btn-emoji:hover  { background: linear-gradient(135deg,#b45309,#92400e); box-shadow:0 4px 14px #b4530940; }
+    .btn-send   { background: linear-gradient(135deg,#ec4899,#8b5cf6); color:#fff; box-shadow:0 4px 16px #ec489960; }
+    .btn-send:hover   { background: linear-gradient(135deg,#db2777,#7c3aed); box-shadow:0 6px 20px #ec489980; transform:translateY(-1px); }
+    .msg-input {
+      flex:1; padding:12px 18px; background:#1f2937; border:1.5px solid #374151;
+      border-radius:24px; color:#fff; font-size:15px; outline:none; transition:border .2s;
+    }
+    .msg-input:focus { border-color:#ec4899; }
+    .msg-input::placeholder { color:#6b7280; }
+    /* Emoji picker */
+    .emoji-grid { display:grid; grid-template-columns:repeat(8,1fr); gap:6px; }
+    .emoji-grid span { font-size:24px; cursor:pointer; text-align:center; padding:4px; border-radius:8px; }
+    .emoji-grid span:hover { background:#374151; }
+    /* Delete button on hover */
+    .msg-row:hover .del-btn { opacity:1; }
+    .del-btn {
+      opacity:0; transition:opacity .2s;
+      background:rgba(239,68,68,.15); border:none; cursor:pointer;
+      border-radius:8px; padding:3px 8px; font-size:11px; color:#f87171;
+    }
+    .del-btn:hover { background:rgba(239,68,68,.35); }
+    /* Delete animation - Telegram dust style */
+    .msg-gone { opacity:0; transform:scale(.9) translateY(-8px); transition:all .35s cubic-bezier(.4,0,.2,1); }
+    /* Context menu animation */
+    @keyframes ctxPop { from{opacity:0;transform:scale(.85)} to{opacity:1;transform:scale(1)} }
+    .ctx-menu { animation: ctxPop .15s ease; }
+  </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex flex-col" style="overflow-x:hidden">
+
+  <!-- NAV -->
+  <nav class="bg-gray-800 border-b border-gray-700 sticky top-0 z-40">
+    <div class="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
+      <button onclick="location.href='../home.html'" class="icon-btn btn-attach" style="font-size:18px">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+      </button>
+      <div class="text-center">
+        <h1 class="font-bold text-lg leading-tight">Fun Jokes 😂</h1>
+        <p class="text-xs text-gray-400">Everyone is Anonymous here</p>
+      </div>
+      <div class="w-12 flex justify-end">
+        <span id="onlineCount" class="text-xs text-green-400 font-semibold"></span>
+      </div>
+    </div>
+  </nav>
+
+  <!-- MESSAGES -->
+  <div id="msgs" class="flex-1 overflow-y-auto p-4 space-y-3 pb-2"></div>
+
+  <!-- FILE PREVIEW STRIP -->
+  <div id="fileStrip" class="hidden px-4 py-2 bg-gray-800 border-t border-gray-700">
+    <div class="flex items-center gap-3 bg-gray-700 rounded-xl px-4 py-2">
+      <span class="text-xl">📎</span>
+      <span id="fileStripName" class="flex-1 text-sm text-gray-300 truncate"></span>
+      <button onclick="clearFile()" class="text-red-400 font-bold text-lg leading-none hover:text-red-300">✕</button>
+    </div>
+  </div>
+
+  <!-- INPUT BAR -->
+  <div class="px-4 py-3 bg-gray-800 border-t border-gray-700">
+    <div class="max-w-2xl mx-auto flex items-center gap-3">
+      <button onclick="pickFile()" class="icon-btn btn-attach" title="Attach file">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
+      </button>
+      <div style="flex:1;display:flex;align-items:center;background:#1f2937;border:1.5px solid #374151;border-radius:24px;padding:0 6px 0 10px;transition:border-color .2s;gap:4px" id="jokeInputWrap">
+        <button onclick="toggleEmoji()" title="Emoji" style="width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#92400e,#78350f);border:1.5px solid #b45309;color:#fde68a;display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;font-size:18px">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+        </button>
+        <input id="inp" style="flex:1;background:none;border:none;outline:none;color:#fff;font-size:15px;padding:11px 4px;font-family:inherit" placeholder="Send as Anonymous…"
+          onkeydown="if(event.key==='Enter')send()"
+          oninput="jokeTyping()"
+          onfocus="document.getElementById('jokeInputWrap').style.borderColor='#ec4899'"
+          onblur="document.getElementById('jokeInputWrap').style.borderColor='#374151'">
+        <button id="jokeSendBtn" onclick="send()" title="Send"
+          style="width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#ec4899,#8b5cf6);color:#fff;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:transform .3s cubic-bezier(.34,1.56,.64,1),opacity .2s;transform:scale(0);opacity:0;overflow:hidden">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- EMOJI PICKER -->
+  <div id="emojiPicker" class="hidden fixed bottom-24 left-4 right-4 max-w-sm mx-auto z-50 bg-gray-800 border border-gray-600 rounded-2xl p-4 shadow-2xl">
+    <div class="emoji-grid">
+      <span onclick="insertEmoji('😂')">😂</span><span onclick="insertEmoji('🤣')">🤣</span>
+      <span onclick="insertEmoji('😭')">😭</span><span onclick="insertEmoji('😍')">😍</span>
+      <span onclick="insertEmoji('🥰')">🥰</span><span onclick="insertEmoji('😎')">😎</span>
+      <span onclick="insertEmoji('🤔')">🤔</span><span onclick="insertEmoji('😅')">😅</span>
+      <span onclick="insertEmoji('🔥')">🔥</span><span onclick="insertEmoji('💯')">💯</span>
+      <span onclick="insertEmoji('👍')">👍</span><span onclick="insertEmoji('❤️')">❤️</span>
+      <span onclick="insertEmoji('💪')">💪</span><span onclick="insertEmoji('🎉')">🎉</span>
+      <span onclick="insertEmoji('😤')">😤</span><span onclick="insertEmoji('🙏')">🙏</span>
+      <span onclick="insertEmoji('😩')">😩</span><span onclick="insertEmoji('🥺')">🥺</span>
+      <span onclick="insertEmoji('😏')">😏</span><span onclick="insertEmoji('🤯')">🤯</span>
+      <span onclick="insertEmoji('😇')">😇</span><span onclick="insertEmoji('🤑')">🤑</span>
+      <span onclick="insertEmoji('😜')">😜</span><span onclick="insertEmoji('🤗')">🤗</span>
+    </div>
+    <button onclick="event.stopPropagation();closeEmoji()" class="mt-3 w-full text-sm text-gray-400 hover:text-white py-2 rounded-xl hover:bg-gray-700 transition">Close ✕</button>
+  </div>
+
+  <!-- LOADING -->
+  <div id="loadingOverlay" class="hidden fixed inset-0 z-[9999] bg-black/80 flex items-center justify-center">
+    <div class="text-center">
+      <div class="w-12 h-12 border-4 border-pink-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+      <p class="loading-text text-white mt-3 font-medium">Loading…</p>
+    </div>
+  </div>
+
+  <script src="../js/main.js"></script>
+  <script>
+    var pendingFile = null;
+    // Track message IDs posted in this session for delete permission
+    var mySessionMsgIds = new Set();
+    // Assign each session a random anon number for fun
+    var anonNum = Math.floor(Math.random() * 9000) + 1000;
+
+    var JOKES = [
+      "Belle big dey tear singlet 🤣","Why did the physiotherapist break up? Too many joint issues 😂",
+      "I told my patient to walk it off… he's still walking 🚶","Anatomy exam tomorrow? Don't lose your head! 💀😂",
+      "Why don't bones tell jokes? They'd crack you up! 🦴","Physio students: always a shoulder to lean on 💪",
+      "My back hurts from carrying this whole class 😭","Why did the muscle go to school? To get a little more flex-ible! 💪😂",
+      "Physio student's mantra: sleep is for the weak (and the muscle-relaxed) 😴","When the lecturer says 'simple anatomy'... liar 😤"
+    ];
+
+    // Auto-post a joke every 3 minutes
+    setInterval(function() {
+      var joke = JOKES[Math.floor(Math.random() * JOKES.length)];
+      db.ref('fun_chat').push({ text: joke, sender: 'Fun Bot', ts: Date.now(), isBot: true });
+    }, 180000);
+
+    function jokeTyping() {
+      var val = document.getElementById('inp').value;
+      var btn = document.getElementById('jokeSendBtn');
+      if (!btn) return;
+      if (val.trim().length > 0) {
+        btn.style.transform = 'scale(1)';
+        btn.style.opacity   = '1';
+      } else {
+        btn.style.transform = 'scale(0)';
+        btn.style.opacity   = '0';
+      }
+    }
+
+    function send() {
+      var inp = document.getElementById('inp');
+      var text = inp.value.trim();
+      if (!text && !pendingFile) return;
+      inp.value = '';
+
+      if (pendingFile) {
+        var f = pendingFile; pendingFile = null; clearFile();
+        showLoading('Uploading…');
+        uploadFile(f, 'chat').then(function(res) {
+          hideLoading();
+          var ref = db.ref('fun_chat').push({
+            text: text || '📎 Sent a file',
+            fileUrl: res.success ? res.url : null,
+            fileType: f.type,
+            sender: 'Anonymous',
+            sessionId: anonNum,
+            ts: Date.now()
+          });
+          mySessionMsgIds.add(ref.key);
+        });
+      } else {
+        var ref = db.ref('fun_chat').push({
+          text: text, sender: 'Anonymous',
+          sessionId: anonNum, ts: Date.now()
+        });
+        // Track the key once it's pushed
+        ref.then ? ref.then(function() { mySessionMsgIds.add(ref.key); }) : (mySessionMsgIds.add(ref.key));
+      }
+    }
+
+    function pickFile() {
+      var inp = document.createElement('input');
+      inp.type = 'file'; inp.accept = 'image/*,application/pdf';
+      inp.onchange = function() {
+        if (inp.files[0]) {
+          pendingFile = inp.files[0];
+          document.getElementById('fileStripName').textContent = inp.files[0].name;
+          document.getElementById('fileStrip').classList.remove('hidden');
+        }
+      };
+      inp.click();
+    }
+
+    function clearFile() { pendingFile = null; document.getElementById('fileStrip').classList.add('hidden'); }
+    function insertEmoji(e) { document.getElementById('inp').value += e; jokeTyping(); closeEmoji(); document.getElementById('inp').focus(); }
+    function toggleEmoji(e) { if(e) e.stopPropagation(); document.getElementById('emojiPicker').classList.toggle('hidden'); }
+    function closeEmoji() { document.getElementById('emojiPicker').classList.add('hidden'); }
+    // Close emoji picker when clicking outside
+    document.addEventListener('click', function(e) {
+      var picker = document.getElementById('emojiPicker');
+      if (!picker.classList.contains('hidden') && !picker.contains(e.target)) {
+        var emojiBtn = e.target.closest('button[onclick*="toggleEmoji"]');
+        if (!emojiBtn) picker.classList.add('hidden');
+      }
+    });
+
+    // ── Telegram-style dust delete animation ────────────────────────────────
+    function dustDelete(el, callback) {
+      var rect = el.getBoundingClientRect();
+      var canvas = document.createElement('canvas');
+      canvas.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;pointer-events:none;z-index:9999';
+      canvas.width  = window.innerWidth;
+      canvas.height = window.innerHeight;
+      document.body.appendChild(canvas);
+      var ctx = canvas.getContext('2d');
+      var cols = ['#ec4899','#8b5cf6','#374151','#6b7280','#1f2937','#9ca3af','#f9a8d4'];
+      var particles = [];
+      for (var i = 0; i < 70; i++) {
+        particles.push({
+          x:  rect.left + Math.random() * rect.width,
+          y:  rect.top  + Math.random() * rect.height,
+          vx: (Math.random() - 0.5) * 5,
+          vy: (Math.random() - 0.9) * 6,
+          r:  Math.random() * 4 + 1,
+          alpha: 1,
+          color: cols[Math.floor(Math.random() * cols.length)]
+        });
+      }
+      el.style.opacity = '0';
+      el.style.transition = 'none';
+      var frame = 0;
+      function animate() {
+        ctx.clearRect(0,0,canvas.width,canvas.height);
+        frame++;
+        var anyAlive = false;
+        particles.forEach(function(p) {
+          p.x += p.vx; p.y += p.vy; p.vy += 0.18; p.alpha -= 0.025;
+          if (p.alpha > 0) {
+            anyAlive = true;
+            ctx.save();
+            ctx.globalAlpha = p.alpha;
+            ctx.fillStyle = p.color;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+          }
+        });
+        if (anyAlive && frame < 90) requestAnimationFrame(animate);
+        else { canvas.remove(); if (callback) callback(); }
+      }
+      requestAnimationFrame(animate);
+    }
+
+    // ── Long press context menu ─────────────────────────────────────────────
+    var _lpt = null, _ctx = null;
+
+    function addLongPress(el, fn) {
+      el.addEventListener('touchstart', function(e){ _lpt = setTimeout(function(){ fn(e); }, 500); }, { passive:true });
+      el.addEventListener('touchend',   function(){ clearTimeout(_lpt); });
+      el.addEventListener('touchmove',  function(){ clearTimeout(_lpt); });
+      el.addEventListener('mousedown',  function(e){ _lpt = setTimeout(function(){ fn(e); }, 500); });
+      el.addEventListener('mouseup',    function(){ clearTimeout(_lpt); });
+    }
+
+    function showJokeCtx(e, msgId, isMine) {
+      if (_ctx) _ctx.remove();
+      var x = e.touches ? e.touches[0].clientX : (e.clientX||160);
+      var y = e.touches ? e.touches[0].clientY : (e.clientY||300);
+      var menu = document.createElement('div');
+      _ctx = menu;
+      menu.className = 'ctx-menu';
+      menu.style.cssText = 'position:fixed;z-index:9998;background:#1f2937;border:1.5px solid #374151;border-radius:18px;padding:8px;min-width:200px;box-shadow:0 8px 32px #000b;left:' + Math.min(x,window.innerWidth-210) + 'px;top:' + Math.min(y+8,window.innerHeight-180) + 'px';
+      // Emoji reactions row
+      var emojiRow = '<div style="display:flex;gap:6px;padding:8px 10px 10px;border-bottom:1px solid #374151">';
+      ['❤️','😂','😮','😢','👍','🔥'].forEach(function(em){
+        emojiRow += '<button onclick="reactJoke(\'' + msgId + '\',\'' + em + '\')" style="font-size:22px;background:none;border:none;cursor:pointer;border-radius:8px;padding:3px;transition:transform .1s" onmousedown="this.style.transform=\'scale(1.3)\'" onmouseup="this.style.transform=\'\'">' + em + '</button>';
+      });
+      emojiRow += '</div>';
+      var items = emojiRow;
+      items += jCtxItem('📋','Copy','copyJoke(\'' + msgId + '\')');
+      if (isMine) items += jCtxItem('🗑️','Delete my message','deleteJokeMsg(\'' + msgId + '\')','#f87171');
+      menu.innerHTML = items;
+      document.body.appendChild(menu);
+      // Close on outside tap/click (but not on the menu itself)
+      setTimeout(function(){
+        function rmCtx(ev) {
+          if (_ctx && !_ctx.contains(ev.target)) { _ctx.remove(); _ctx = null; document.removeEventListener('click', rmCtx); document.removeEventListener('touchend', rmCtx); }
+        }
+        document.addEventListener('click', rmCtx);
+        document.addEventListener('touchend', rmCtx);
+      }, 150);
+    }
+
+    function jCtxItem(icon, label, action, color) {
+      return '<button onclick="' + action + '" style="display:flex;align-items:center;gap:10px;width:100%;padding:10px 14px;background:none;border:none;cursor:pointer;border-radius:12px;color:' + (color||'#e5e7eb') + ';font-size:14px;font-weight:500;text-align:left" onmouseover="this.style.background=\'#374151\'" onmouseout="this.style.background=\'none\'">' +
+        '<span style="font-size:18px">' + icon + '</span>' + label + '</button>';
+    }
+
+    function copyJoke(msgId) {
+      if (_ctx) { _ctx.remove(); _ctx = null; }
+      var el = document.getElementById('m_' + msgId);
+      if (!el) return;
+      var text = (el.querySelector('.bubble-text') || el).textContent.trim();
+      navigator.clipboard.writeText(text).then(function(){ showToast('Copied!'); });
+    }
+
+    function reactJoke(msgId, emoji) {
+      if (_ctx) { _ctx.remove(); _ctx = null; }
+      db.ref('fun_chat/' + msgId + '/reactions/' + (Math.random().toString(36).slice(2))).set(emoji);
+      // Show reaction visually
+      var el = document.getElementById('m_' + msgId);
+      if (el) {
+        var rbar = el.querySelector('.reaction-bar');
+        if (!rbar) {
+          rbar = document.createElement('div');
+          rbar.className = 'reaction-bar';
+          rbar.style.cssText = 'margin-top:4px;display:flex;flex-wrap:wrap;gap:4px';
+          el.appendChild(rbar);
+        }
+        var span = document.createElement('span');
+        span.style.cssText = 'background:#374151;border-radius:20px;padding:2px 8px;font-size:14px;display:inline-block';
+        span.textContent = emoji;
+        rbar.appendChild(span);
+      }
+    }
+
+    // Delete message (only available for this session's messages)
+    function deleteJokeMsg(msgId) {
+      if (_ctx) { _ctx.remove(); _ctx = null; }
+      if (!mySessionMsgIds.has(msgId)) { showToast('You can only delete your own messages 🔒'); return; }
+      var el = document.getElementById('m_' + msgId);
+      if (!el) return;
+      dustDelete(el, function() {
+        el.remove();
+        db.ref('fun_chat/' + msgId).remove();
+      });
+    }
+
+    function timeAgo(ts) {
+      var s = Math.floor((Date.now() - ts) / 1000);
+      if (s < 60) return 'just now';
+      if (s < 3600) return Math.floor(s / 60) + 'm ago';
+      if (s < 86400) return Math.floor(s / 3600) + 'h ago';
+      return Math.floor(s / 86400) + 'd ago';
+    }
+
+    function renderMsg(m) {
+      if (document.getElementById('m_' + m.id)) return;
+      var c = document.getElementById('msgs');
+      var isMine = mySessionMsgIds.has(m.id) || (m.sessionId && m.sessionId === anonNum);
+      if (isMine) mySessionMsgIds.add(m.id);
+      var div = document.createElement('div');
+      div.id = 'm_' + m.id;
+      div.className = 'flex items-start gap-3 msg-row ' + (m.isBot ? 'opacity-80' : '');
+
+      var bubble = m.isBot
+        ? 'bg-yellow-500/20 border border-yellow-500/40 text-yellow-100'
+        : 'bg-gray-800 text-white';
+
+      var avatarBg  = m.isBot ? 'bg-yellow-600' : 'bg-gradient-to-br from-pink-500 to-purple-600';
+      var avatarText = m.isBot ? '🤖' : '😈';
+      var senderLabel = m.isBot ? '🤖 Fun Bot' : 'Anonymous';
+
+      var fileHtml = '';
+      if (m.fileUrl) {
+        if (m.fileType && m.fileType.startsWith('image/')) {
+          fileHtml = '<img src="' + m.fileUrl + '" class="rounded-xl mt-2 max-w-full max-h-48 object-cover cursor-pointer" onclick="window.open(\'' + m.fileUrl + '\')">';
+        } else {
+          fileHtml = '<a href="' + m.fileUrl + '" target="_blank" class="flex items-center gap-2 mt-2 text-blue-400 underline text-sm">📎 View attachment</a>';
+        }
+      }
+
+      var delHtml = (isMine && !m.isBot)
+        ? '<button class="del-btn mt-1" onclick="deleteJokeMsg(\'' + m.id + '\')">🗑 Delete</button>'
+        : '';
+
+      div.innerHTML =
+        '<div class="w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold flex-shrink-0 ' + avatarBg + '">' + avatarText + '</div>' +
+        '<div class="flex-1 min-w-0">' +
+          '<div class="flex items-center gap-2 mb-1">' +
+            '<span class="font-semibold text-sm">' + senderLabel + '</span>' +
+            '<span class="text-xs text-gray-500">' + timeAgo(m.ts) + '</span>' +
+          '</div>' +
+          '<div class="' + bubble + ' rounded-2xl rounded-tl-sm px-4 py-3 text-sm break-words bubble-text">' +
+            m.text + fileHtml +
+          '</div>' +
+          delHtml +
+        '</div>';
+
+      // Long-press to show context menu
+      addLongPress(div, function(e) { showJokeCtx(e, m.id, isMine); });
+
+      c.appendChild(div);
+      c.scrollTop = c.scrollHeight;
+    }
+
+    // Listen for removals
+    db.ref('fun_chat').on('child_removed', function(snap) {
+      var el = document.getElementById('m_' + snap.key);
+      if (el) {
+        el.classList.add('msg-gone');
+        setTimeout(function() { el.remove(); }, 300);
+      }
+    });
+
+    // Real-time listener
+    db.ref('fun_chat').limitToLast(80).on('child_added', function(snap) {
+      var v = snap.val();
+      renderMsg({
+        id: snap.key,
+        text: v.text || '',
+        fileUrl: v.fileUrl || null,
+        fileType: v.fileType || null,
+        sender: v.sender || 'Anonymous',
+        sessionId: v.sessionId || null,
+        ts: v.ts || Date.now(),
+        isBot: v.isBot || false
+      });
+    });
+  </script>
+</body>
+</html>
