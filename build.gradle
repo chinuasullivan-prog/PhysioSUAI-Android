@@ -1,61 +1,16 @@
-plugins {
-    id 'com.android.application'
-}
-
-android {
-    namespace 'com.physiosuai.app'
-    compileSdk 34
-
-    defaultConfig {
-        applicationId "com.physiosuai.app"
-        minSdk 21
-        targetSdk 34
-        versionCode 8
-        versionName "8.0"
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
     }
-
-    signingConfigs {
-        release {
-            storeFile file("keystore.jks")
-            storePassword System.getenv("KEYSTORE_PASSWORD") ?: "physiosuai123"
-            keyAlias System.getenv("KEY_ALIAS") ?: "physiosuai"
-            keyPassword System.getenv("KEY_PASSWORD") ?: "physiosuai123"
-        }
-    }
-
-    buildTypes {
-        release {
-            minifyEnabled false
-            signingConfig signingConfigs.release
-        }
-        debug {
-            applicationIdSuffix ".debug"
-        }
-    }
-
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_17
-        targetCompatibility JavaVersion.VERSION_1_17
-    }
-
-    packagingOptions {
-        resources {
-            excludes += ['/META-INF/{AL2.0,LGPL2.1}']
-        }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.4.0'
     }
 }
 
-configurations.all {
-    resolutionStrategy {
-        force 'androidx.core:core-ktx:1.9.0'
-        force 'androidx.core:core:1.9.0'
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
     }
-}
-
-dependencies {
-    implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.11.0'
-    implementation 'androidx.webkit:webkit:1.10.0'
-    implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
-    implementation 'androidx.core:core-ktx:1.9.0'
 }
