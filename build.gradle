@@ -8,9 +8,4 @@ buildscript {
     }
 }
 
-allprojects {
-    repositories {
-        google()
-        mavenCentral()
-    }
-}
+// Keep this file very simple. Do not add "allprojects" or "repositories" here.
